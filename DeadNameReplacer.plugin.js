@@ -41,9 +41,9 @@ const config = {
         },
         {
             type: "textbox",
-            name: "Name",
-            note: "Insert your name that will replace your dead name.",
-            id: "name",
+            name: "Replace With",
+            note: "Replaces your dead name with input.",
+            id: "replaceWith",
             value: ""
         }
     ]
@@ -99,7 +99,7 @@ module.exports = !global.ZeresPluginLibrary ? class {
         onStart() {
             this.unpatch = BdApi.monkeyPatch(MessageModule, 'default', {
                 after: (patchData) => {
-                    if (!this.settings.deadname || !this.settings.name) {
+                    if (!this.settings.deadname || !this.settings.replaceWith) {
                         return patchData.returnValue
                     }
 
@@ -114,7 +114,7 @@ module.exports = !global.ZeresPluginLibrary ? class {
 
                         if (patchData.thisObject.props.childrenMessageContent.props.message.content.includes(deadname)
                             || patchData.thisObject.props.childrenMessageContent.props.message.content.match(regex)) {
-                            const newContent = patchData.thisObject.props.childrenMessageContent.props.message.content.replaceAll(regex, this.settings.name.trim());
+                            const newContent = patchData.thisObject.props.childrenMessageContent.props.message.content.replaceAll(regex, this.settings.replaceWith.trim());
                             patchData.thisObject.props.childrenMessageContent.props.message.content = newContent;
 
                             Dispatcher.dirtyDispatch({
