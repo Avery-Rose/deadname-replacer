@@ -9,8 +9,6 @@
  */
 
 const MessageModule = BdApi.findModule(m => m.default && m.default.toString && m.default.toString().includes('childrenRepliedMessage'));
-const { TooltipContainer } = BdApi.findModuleByProps("TooltipContainer");
-const Pin = BdApi.findModuleByDisplayName('Pin');
 
 const config = {
     info: {
@@ -37,7 +35,7 @@ const config = {
         {
             type: "textbox",
             name: "Dead Name",
-            note: "Insert your dead name to be replaced withg your name.",
+            note: "Insert your dead name to be replaced withg your name. you can use multiple names seperated by a comma.",
             id: "deadname",
             value: ""
         },
@@ -101,20 +99,32 @@ module.exports = !global.ZeresPluginLibrary ? class {
         onStart() {
             this.unpatch = BdApi.monkeyPatch(MessageModule, 'default', {
                 after: (patchData) => {
-                    let deadname = this.settings.deadname.trim()
-                    let regex = new RegExp(this.escapeRegex(this.settings.deadname.trim()), "gi");
-                    if (patchData.thisObject.props.childrenMessageContent.props.message.content.includes(deadname) ||
-                        patchData.thisObject.props.childrenMessageContent.props.message.content.match(regex)) {
-
-                        const newContent = patchData.thisObject.props.childrenMessageContent.props.message.content.replaceAll(regex, this.settings.name.trim());
-                        patchData.thisObject.props.childrenMessageContent.props.message.content = newContent;
-
-                        Dispatcher.dirtyDispatch({
-                            type: "MESSAGE_UPDATE",
-                            message: patchData.thisObject.props.childrenMessageContent.props.message
-                        })
+                    if (!this.settings.deadname || !this.settings.name) {
+                        return patchData.returnValue
                     }
 
+                    let deadnames = this.settings.deadname.split(",");
+
+                    // sort deadnames by longest to shortest
+                    deadnames = deadnames.sort((a, b) => b.length - a.length);
+
+                    for (let i = 0; i < deadnames.length; i++) {
+                        let deadname = deadnames[i].trim();
+                        let regex = new RegExp(this.escapeRegex(deadname), "gi");
+
+                        if (patchData.thisObject.props.childrenMessageContent.props.message.content.includes(deadname)
+                            || patchData.thisObject.props.childrenMessageContent.props.message.content.match(regex)) {
+                            const newContent = patchData.thisObject.props.childrenMessageContent.props.message.content.replaceAll(regex, this.settings.name.trim());
+                            patchData.thisObject.props.childrenMessageContent.props.message.content = newContent;
+
+                            Dispatcher.dirtyDispatch({
+                                type: "MESSAGE_UPDATE",
+                                message: patchData.thisObject.props.childrenMessageContent.props.message
+                            })
+
+                            // !create some sort of indicator that the name was replaced
+                        }
+                    }
                     return patchData.returnValue;
                 }
             });
