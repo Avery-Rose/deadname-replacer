@@ -45,7 +45,56 @@ const config = {
             note: "Replaces your dead name with input.",
             id: "replaceWith",
             value: ""
-        }
+        },
+        {
+            type: "category",
+            name: "Styles",
+            id: "styles",
+            settings: [
+                {
+                    type: "switch",
+                    name: "Bold",
+                    note: "bolds the replaced name.",
+                    id: "bold",
+                    value: false
+                },
+                {
+                    type: "switch",
+                    name: "Italic",
+                    note: "italicizes the replaced name.",
+                    id: "italic",
+                    value: false
+                },
+                {
+                    type: "switch",
+                    name: "Underline",
+                    note: "underlines the replaced name.",
+                    id: "underline",
+                    value: false
+                },
+                {
+                    type: "switch",
+                    name: "Strikethrough",
+                    note: "strikethroughs the replaced name.",
+                    id: "strikethrough",
+                    value: false
+                },
+                {
+                    type: "switch",
+                    name: "Spoiler",
+                    note: "makes the replaced name a spoiler.",
+                    id: "spoiler",
+                    value: false
+                },
+                {
+                    type: "switch",
+                    name: "Inline Code",
+                    note: "makes the replaced name an inline code. if enabled only this style will be applied.",
+                    id: "inlineCode",
+                    value: false
+                }
+            ]
+        },
     ]
 };
 
@@ -83,9 +132,8 @@ module.exports = !global.ZeresPluginLibrary ? class {
             super();
 
             this.getSettingsPanel = () => {
-                console.log(this.settings);
                 return this.buildSettingsPanel().getElement();
-            };
+            }
         }
 
         //#region Methods
@@ -99,30 +147,55 @@ module.exports = !global.ZeresPluginLibrary ? class {
         onStart() {
             this.unpatch = BdApi.monkeyPatch(MessageModule, 'default', {
                 after: (patchData) => {
-                    if (!this.settings.deadname || !this.settings.replaceWith) {
-                        return patchData.returnValue
+                    const { replaceWith, deadname } = this.settings;
+
+                    // sanitize replaceWith and deadname and remove ['*','|','_','`','~']
+                    let replaceWithSanitized = replaceWith.replace(/[*|_`~]/g, '').trim();
+                    let deadnameSanitized = deadname.replace(/[*|_`~]/g, '').trim();
+
+                    if (!deadnameSanitized || !replaceWithSanitized) {
+                        return patchData.returnValue;
                     }
 
-                    let deadnames = this.settings.deadname.split(",");
+                    let deadnames = deadnameSanitized.split(",");
 
                     // sort deadnames by longest to shortest
                     deadnames = deadnames.sort((a, b) => b.length - a.length);
 
+                    const boolSettings = {
+                        bold: this.settings.styles.bold,
+                        italic: this.settings.styles.italic,
+                        underline: this.settings.styles.underline,
+                        strikethrough: this.settings.styles.strikethrough,
+                        inlineCode: this.settings.styles.inlineCode,
+                        spoiler: this.settings.styles.spoiler
+                    };
+
+                    if (boolSettings.inlineCode) {
+                        replaceWithSanitized = `\`${replaceWithSanitized}\``;
+                    } else {
+                        replaceWithSanitized = boolSettings.bold ? `**${replaceWithSanitized}**` : replaceWithSanitized;
+                        replaceWithSanitized = boolSettings.italic ? `*${replaceWithSanitized}*` : replaceWithSanitized;
+                        replaceWithSanitized = boolSettings.underline ? `__${replaceWithSanitized}__` : replaceWithSanitized;
+                        replaceWithSanitized = boolSettings.strikethrough ? `~~${replaceWithSanitized}~~` : replaceWithSanitized;
+                        replaceWithSanitized = boolSettings.spoiler ? `||${replaceWithSanitized}||` : replaceWithSanitized;
+                    }
                     for (let i = 0; i < deadnames.length; i++) {
                         let deadname = deadnames[i].trim();
                         let regex = new RegExp(this.escapeRegex(deadname), "gi");
 
-                        if (patchData.thisObject.props.childrenMessageContent.props.message.content.includes(deadname)
-                            || patchData.thisObject.props.childrenMessageContent.props.message.content.match(regex)) {
-                            const newContent = patchData.thisObject.props.childrenMessageContent.props.message.content.replaceAll(regex, this.settings.replaceWith.trim());
-                            patchData.thisObject.props.childrenMessageContent.props.message.content = newContent;
+                        // if the requested replacer contains the deadname
+                        if (!replaceWith.match(regex)) {
+                            if (patchData.thisObject.props.childrenMessageContent.props.message.content.includes(deadname)
+                                || patchData.thisObject.props.childrenMessageContent.props.message.content.match(regex)) {
+                                const newContent = patchData.thisObject.props.childrenMessageContent.props.message.content.replaceAll(regex, replaceWithSanitized);
+                                patchData.thisObject.props.childrenMessageContent.props.message.content = newContent;
 
-                            Dispatcher.dirtyDispatch({
-                                type: "MESSAGE_UPDATE",
-                                message: patchData.thisObject.props.childrenMessageContent.props.message
-                            })
-
-                            // !create some sort of indicator that the name was replaced
+                                Dispatcher.dirtyDispatch({
+                                    type: "MESSAGE_UPDATE",
+                                    message: patchData.thisObject.props.childrenMessageContent.props.message
+                                })
+                            }
                         }
                     }
                     return patchData.returnValue;
